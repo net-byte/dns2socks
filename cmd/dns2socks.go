@@ -4,13 +4,17 @@ import (
 	"io"
 	"log"
 	"net"
+	"time"
 
 	"github.com/miekg/dns"
+	"github.com/patrickmn/go-cache"
 	"github.com/thinkgos/go-socks5/ccsocks5"
 )
 
+var c = cache.New(30*time.Minute, 10*time.Minute)
+
 //StartServer acts start a dns proxy server
-func StartServer(localAddr *string, socksAddr *string, dnsAddr *string) {
+func StartServer(localAddr *string, socksAddr *string, dnsAddr *string, cached *bool) {
 	addr, err := net.ResolveUDPAddr("udp", *localAddr)
 	if nil != err {
 		log.Fatalln("Unable to get UDP socket:", err)
@@ -21,6 +25,7 @@ func StartServer(localAddr *string, socksAddr *string, dnsAddr *string) {
 	}
 	defer conn.Close()
 	log.Printf("dns2socks started on %v", *localAddr)
+
 	client := ccsocks5.NewClient(*socksAddr)
 	defer client.Close()
 	buf := make([]byte, 4096)
@@ -30,7 +35,17 @@ func StartServer(localAddr *string, socksAddr *string, dnsAddr *string) {
 			continue
 		}
 		b := buf[:n]
-		printQuestion(b)
+		if *cached {
+			answer := getAnswerFromCache(b)
+			if answer != nil {
+				respMsg := new(dns.Msg)
+				respMsg.Unpack(b)
+				respMsg.Answer = append(respMsg.Answer, *answer)
+				respData, _ := respMsg.Pack()
+				conn.WriteToUDP(respData, fromAddr)
+				continue
+			}
+		}
 		proxyConn, err := client.Dial("udp", *dnsAddr)
 		if err != nil {
 			log.Println(err)
@@ -45,21 +60,35 @@ func StartServer(localAddr *string, socksAddr *string, dnsAddr *string) {
 					break
 				}
 				b := buf[:n]
-				printAnswer(b)
+				if *cached {
+					setAnswerCache(b)
+				}
 				conn.WriteToUDP(b, fromAddr)
 			}
 		}()
 	}
 }
 
-func printQuestion(data []byte) {
+func getAnswerFromCache(data []byte) *dns.RR {
 	msg := new(dns.Msg)
 	msg.Unpack(data)
-	log.Printf("dns question:%v", msg.Question)
+	q := msg.Question[0]
+	if q.Qtype == dns.TypeA {
+		if v, found := c.Get(q.Name); found {
+			log.Printf("query dns from cache:%v", msg.Question)
+			ret := v.(*dns.RR)
+			return ret
+		}
+	}
+	return nil
 }
 
-func printAnswer(data []byte) {
+func setAnswerCache(data []byte) {
 	msg := new(dns.Msg)
 	msg.Unpack(data)
-	log.Printf("dns answer:%v", msg.Answer)
+	q := msg.Question[0]
+	if q.Qtype == dns.TypeA && len(msg.Answer) > 0 {
+		c.Set(q.Name, &msg.Answer[len(msg.Answer)-1], cache.DefaultExpiration)
+		log.Printf("set dns cache:%v", q.Name)
+	}
 }
