@@ -16,5 +16,5 @@ Usage of ./bin/dns2socks:
 ```
 # Run on docker  
 ```
-docker run  -d --restart=always  --net=host --name dns2socks -p 53:53 netbyte/dns2socks -l=127.0.0.1:53 -s=127.0.0.1:1080 -d=8.8.8.8:53
+docker run  -d --restart=always  --net=host --name dns2socks -p 53:53/udp netbyte/dns2socks -l=127.0.0.1:53 -s=127.0.0.1:1080 -d=8.8.8.8:53
 ```
