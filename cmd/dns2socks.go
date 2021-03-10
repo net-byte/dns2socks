@@ -13,7 +13,7 @@ import (
 
 var c = cache.New(30*time.Minute, 10*time.Minute)
 
-//StartServer acts start a dns proxy server
+//StartServer starts server
 func StartServer(localAddr *string, socksAddr *string, dnsAddr *string, cached *bool) {
 	addr, err := net.ResolveUDPAddr("udp", *localAddr)
 	if nil != err {
