@@ -49,6 +49,7 @@ func StartServer(localAddr *string, socksAddr *string, dnsAddr *string, cached *
 		proxyConn, err := client.Dial("udp", *dnsAddr)
 		if err != nil {
 			log.Println(err)
+			continue
 		}
 		defer proxyConn.Close()
 		proxyConn.Write(b)
