@@ -17,11 +17,11 @@ var c = cache.New(30*time.Minute, 10*time.Minute)
 func StartServer(localAddr *string, socksAddr *string, dnsAddr *string, cached *bool) {
 	addr, err := net.ResolveUDPAddr("udp", *localAddr)
 	if nil != err {
-		log.Fatalln("Unable to get UDP socket:", err)
+		log.Fatalln("failed to resolve udp addr:", err)
 	}
 	conn, err := net.ListenUDP("udp", addr)
 	if nil != err {
-		log.Fatalln("Unable to listen on UDP socket:", err)
+		log.Fatalln("failed to listen udp:", err)
 	}
 	defer conn.Close()
 	log.Printf("dns2socks started on %v", *localAddr)
@@ -51,9 +51,9 @@ func StartServer(localAddr *string, socksAddr *string, dnsAddr *string, cached *
 			log.Println(err)
 			continue
 		}
-		defer proxyConn.Close()
 		proxyConn.Write(b)
 		go func() {
+			defer proxyConn.Close()
 			buf := make([]byte, 4096)
 			for {
 				n, err := proxyConn.Read(buf)
@@ -76,7 +76,6 @@ func getAnswerFromCache(data []byte) *dns.RR {
 	q := msg.Question[0]
 	if q.Qtype == dns.TypeA {
 		if v, found := c.Get(q.Name); found {
-			log.Printf("query dns from cache:%v", msg.Question)
 			ret := v.(*dns.RR)
 			return ret
 		}
@@ -90,6 +89,5 @@ func setAnswerCache(data []byte) {
 	q := msg.Question[0]
 	if q.Qtype == dns.TypeA && len(msg.Answer) > 0 {
 		c.Set(q.Name, &msg.Answer[len(msg.Answer)-1], cache.DefaultExpiration)
-		log.Printf("set dns cache:%v", q.Name)
 	}
 }
